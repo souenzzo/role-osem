@@ -1,0 +1,28 @@
+---
+builder:
+  name: root
+  group: root
+  home: /root
+runner:
+  name: www-data
+  group: www-data
+  home: /var/www
+git:
+  repo: "https://github.com/openSUSE/osem.git"
+  version: "v1.0"
+  dest: "/srv/osem"
+sites_dir: "/etc/apache2/sites-available"
+RAILS_ENV: "production"
+env:
+  OSEM_NAME: '"OSEM"'
+  OSEM_HOSTNAME: '"localhost:3000"'
+  OSEM_EMAIL_ADDRESS: '"no-reply@localhost"'
+  OSEM_FACTORY_LINT: '"false"'
+  OSEM_ICHAIN_ENABLED: false
+rwdir:
+- log
+- tmp
+bundler_path: /bin/bundler
+database: {}
+secrets: {}
+

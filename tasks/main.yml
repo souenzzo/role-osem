@@ -1,0 +1,95 @@
+---
+# HOWTO: Recompile without chage key: ` mv log/production.log /bkp `
+# HOWTO: Generate a new key: ` mv config/key /bkp; mv log/production.log /bkp `
+- name: Create dir
+  file:
+    path: "{{ git.dest }}"
+    owner: "{{ builder.name }}"
+    group: "{{ builder.group }}"
+    state: "directory"
+
+- name: Clone OSEM
+  become: yes
+  become_user: "{{ builder.name }}"
+  git: "{{ git }}"
+
+- name: Install bundler
+  become: yes
+  become_user: "{{ builder.name }}"
+  gem:
+    name: bundler
+
+- name: Get gems user_dir
+  become: yes
+  become_user: "{{ builder.name }}"
+  register: print_Gem_user_dir
+  command: "ruby -e 'print Gem.user_dir'"
+  changed_when: "print_Gem_user_dir.rc != 0"
+
+- name: Bundler path
+  set_fact:
+    bundler_exec: "{{ print_Gem_user_dir.stdout }}/bin/bundler"
+
+- name: running bundler
+  become: yes
+  become_user: "{{ builder.name }}"
+  environment:
+    RAILS_ENV: "{{ RAILS_ENV }}"
+  bundler:
+    chdir: "{{ git.dest }}"
+    deployment_mode: yes
+    executable: "{{ bundler_exec }}"
+
+
+- name: Get secret
+  become: yes
+  become_user: "{{ builder.name }}"
+  register: secret_key_command
+  shell: "cat ./config/key || {{ bundler_exec }} exec rake secret | tee ./config/key"
+  environment:
+    RAILS_ENV: "{{ RAILS_ENV }}"
+  changed_when: False
+  args:
+    chdir: "{{ git.dest }}"
+
+- name: Set key fact
+  set_fact:
+    secret_key: "{{ secret_key_command.stdout }}"
+
+- name: Apply settings
+  template:
+    src: "./templates/{{ item }}.j2"
+    dest: "{{ git.dest }}/{{ item }}"
+    owner: "{{ builder.name }}"
+    group: "{{ runner.group }}"
+    mode: "440"
+  with_items:
+  - "./.env"
+  - "./config/database.yml"
+  - "./config/secrets.yml"
+
+- name: Create some dirs/set uid
+  file:
+    name: "{{ git.dest }}/{{ item }}"
+    owner: "{{ builder.name }}"
+    group: "{{ runner.group }}"
+    mode: "770"
+    state: "directory"
+  with_items: "{{ rwdir }}"
+
+- name: Bundle precompile
+  become: yes
+  become_user: "operador"
+  shell: "{{ bundler_exec }} exec rake assets:precompile db:migrate && > ./log/production.log"
+  environment:
+    RAILS_ENV: "{{ RAILS_ENV }}"
+  args:
+    chdir: "{{ git.dest }}"
+    executable: "/bin/bash"
+    creates: "./log/production.log"
+
+- name: Apache site
+  template:
+    src: "./templates/000-osem.conf.j2"
+    dest: "{{ sites_dir }}/000-osen.conf"
+
