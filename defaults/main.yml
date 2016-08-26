@@ -7,10 +7,10 @@ runner:
   name: www-data
   group: www-data
   home: /var/www
-git:
-  repo: "https://github.com/openSUSE/osem.git"
-  version: "v1.0"
-  dest: "/srv/osem"
+git_repo: "https://github.com/openSUSE/osem.git"
+git_version: "v1.0"
+git_dest: "/srv/osem"
+git_env: {}
 sites_dir: "/etc/apache2/sites-available"
 RAILS_ENV: "production"
 env:

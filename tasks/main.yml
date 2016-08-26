@@ -3,15 +3,10 @@
 # HOWTO: Generate a new key: ` mv config/key /bkp; mv log/production.log /bkp `
 - name: Create dir
   file:
-    path: "{{ git.dest }}"
+    path: "{{ git_dest }}"
     owner: "{{ builder.name }}"
     group: "{{ builder.group }}"
     state: "directory"
-
-- name: Clone OSEM
-  become: yes
-  become_user: "{{ builder.name }}"
-  git: "{{ git }}"
 
 - name: Install bundler
   become: yes
@@ -30,16 +25,22 @@
   set_fact:
     bundler_exec: "{{ print_Gem_user_dir.stdout }}/bin/bundler"
 
+- name: "clone @{{ git_version }}"
+  become: yes
+  become_user: "{{ builder.name }}"
+  git:
+    repo: "{{ git_repo }}"
+    dest: "{{ git_dest }}"
+    version: "{{ git_version }}"
+  environment: "{{ git_env }}"
+
 - name: running bundler
   become: yes
   become_user: "{{ builder.name }}"
-  environment:
-    RAILS_ENV: "{{ RAILS_ENV }}"
   bundler:
-    chdir: "{{ git.dest }}"
+    chdir: "{{ git_dest }}"
     deployment_mode: yes
     executable: "{{ bundler_exec }}"
-
 
 - name: Get secret
   become: yes
@@ -50,7 +51,7 @@
     RAILS_ENV: "{{ RAILS_ENV }}"
   changed_when: False
   args:
-    chdir: "{{ git.dest }}"
+    chdir: "{{ git_dest }}"
 
 - name: Set key fact
   set_fact:
@@ -59,7 +60,7 @@
 - name: Apply settings
   template:
     src: "./templates/{{ item }}.j2"
-    dest: "{{ git.dest }}/{{ item }}"
+    dest: "{{ git_dest }}/{{ item }}"
     owner: "{{ builder.name }}"
     group: "{{ runner.group }}"
     mode: "440"
@@ -70,23 +71,29 @@
 
 - name: Create some dirs/set uid
   file:
-    name: "{{ git.dest }}/{{ item }}"
+    name: "{{ git_dest }}/{{ item }}"
     owner: "{{ builder.name }}"
     group: "{{ runner.group }}"
     mode: "770"
     state: "directory"
   with_items: "{{ rwdir }}"
 
-- name: Bundle precompile
+- name: Bundle db:setup
   become: yes
   become_user: "operador"
-  shell: "{{ bundler_exec }} exec rake assets:precompile db:migrate && > ./log/production.log"
-  environment:
-    RAILS_ENV: "{{ RAILS_ENV }}"
+  shell: "{{ bundler_exec }} exec rake db:setup RAILS_ENV={{ RAILS_ENV }} &> ./log/setup.log"
   args:
-    chdir: "{{ git.dest }}"
-    executable: "/bin/bash"
-    creates: "./log/production.log"
+    chdir: "{{ git_dest }}"
+    creates: "./log/setup.log"
+
+- name: Bundle db:migrate assets:precompile
+  become: yes
+  become_user: "operador"
+  shell: "{{ bundler_exec }} exec rake db:migrate assets:precompile  RAILS_ENV={{ RAILS_ENV }} &> ./log/{{ RAILS_ENV }}.log"
+  args:
+    chdir: "{{ git_dest }}"
+    creates: "./log/{{ RAILS_ENV }}.log"
+
 
 - name: Apache site
   template:

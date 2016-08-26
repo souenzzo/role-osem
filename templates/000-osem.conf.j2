@@ -1,0 +1,13 @@
+<VirtualHost *:80>
+  ServerName jessie.int.if.uff.br
+  ServerAdmin operador@if.uff.br
+  DocumentRoot {{ osem.wroot }}
+  PassengerUser www-data
+  PassengerGroup www-data
+  RailsEnv {{ RAILS_ENV }}
+  <Directory {{ osem.wroot }}>
+    Allow from all
+    Options -MultiViews
+    Require all granted
+  </Directory>
+</Virtualhost>
