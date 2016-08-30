@@ -1,33 +1,21 @@
 ---
 # HOWTO: Recompile without chage key: ` mv log/production.log /bkp `
 # HOWTO: Generate a new key: ` mv config/key /bkp; mv log/production.log /bkp `
-- name: Create dir
-  file:
-    path: "{{ git_dest }}"
-    owner: "{{ builder.name }}"
-    group: "{{ builder.group }}"
-    state: "directory"
 
 - name: Install bundler
-  become: yes
-  become_user: "{{ builder.name }}"
   gem:
     name: bundler
 
-- name: Get gems user_dir
-  become: yes
-  become_user: "{{ builder.name }}"
-  register: print_Gem_user_dir
-  command: "ruby -e 'print Gem.user_dir'"
-  changed_when: "print_Gem_user_dir.rc != 0"
+- name: Get Gem.user_dir
+  register: cmd_gem
+  command: ruby -e 'print Gem.user_dir'
+  changed_when: "cmd_gem.rc != 0"
 
-- name: Bundler path
+- name: Bundler executable
   set_fact:
-    bundler_exec: "{{ print_Gem_user_dir.stdout }}/bin/bundler"
+    bundler: "{{ cmd_gem.stdout }}/bin/bundler"
 
 - name: "clone @{{ git_version }}"
-  become: yes
-  become_user: "{{ builder.name }}"
   git:
     repo: "{{ git_repo }}"
     dest: "{{ git_dest }}"
@@ -35,34 +23,42 @@
   environment: "{{ git_env }}"
 
 - name: running bundler
-  become: yes
-  become_user: "{{ builder.name }}"
   bundler:
     chdir: "{{ git_dest }}"
     deployment_mode: yes
-    executable: "{{ bundler_exec }}"
+    executable: "{{ bundler }}"
 
-- name: Get secret
-  become: yes
-  become_user: "{{ builder.name }}"
-  register: secret_key_command
-  shell: "cat ./config/key || {{ bundler_exec }} exec rake secret | tee ./config/key"
-  environment:
-    RAILS_ENV: "{{ RAILS_ENV }}"
-  changed_when: False
+- name: check secrets.yml
+  command: grep 'secret_key_base' ./config/secrets.yml
   args:
     chdir: "{{ git_dest }}"
+  register: has_secret
+  changed_when: no
+  ignore_errors: yes
 
-- name: Set key fact
+- name: get secret from file
+  command: awk '/secret_key_base/{print $2}' ./config/secrets.yml
+  args:
+    chdir: "{{ git_dest }}"
+  register: cmd_secrets
+  when: has_secret.rc == 0
+
+- name: Gen a new secret
+  command: "{{ bundler }} exec rake secret"
+  args:
+    chdir: "{{ git_dest }}"
+  register: cmd_secrets
+  when: has_secret.rc != 0
+
+- name: Set new key to 'secret_key'
   set_fact:
-    secret_key: "{{ secret_key_command.stdout }}"
+    secret_key: "{{ cmd_secrets.stdout }}"
 
 - name: Apply settings
   template:
     src: "./templates/{{ item }}.j2"
     dest: "{{ git_dest }}/{{ item }}"
-    owner: "{{ builder.name }}"
-    group: "{{ runner.group }}"
+    group: "{{ run_group }}"
     mode: "440"
   with_items:
   - "./.env"
@@ -72,24 +68,19 @@
 - name: Create some dirs/set uid
   file:
     name: "{{ git_dest }}/{{ item }}"
-    owner: "{{ builder.name }}"
-    group: "{{ runner.group }}"
+    group: "{{ run_group }}"
     mode: "770"
     state: "directory"
   with_items: "{{ rwdir }}"
 
 - name: Bundle db:setup
-  become: yes
-  become_user: "operador"
-  shell: "{{ bundler_exec }} exec rake db:setup RAILS_ENV={{ RAILS_ENV }} &> ./log/setup.log"
+  shell: "{{ bundler }} exec rake db:setup RAILS_ENV={{ RAILS_ENV }} &> ./log/setup.log"
   args:
     chdir: "{{ git_dest }}"
     creates: "./log/setup.log"
 
 - name: Bundle db:migrate assets:precompile
-  become: yes
-  become_user: "operador"
-  shell: "{{ bundler_exec }} exec rake db:migrate assets:precompile  RAILS_ENV={{ RAILS_ENV }} &> ./log/{{ RAILS_ENV }}.log"
+  shell: "{{ bundler }} exec rake db:migrate assets:precompile  RAILS_ENV={{ RAILS_ENV }} &> ./log/{{ RAILS_ENV }}.log"
   args:
     chdir: "{{ git_dest }}"
     creates: "./log/{{ RAILS_ENV }}.log"
@@ -98,5 +89,5 @@
 - name: Apache site
   template:
     src: "./templates/000-osem.conf.j2"
-    dest: "{{ sites_dir }}/000-osen.conf"
+    dest: "{{ ansible_env.HOME }}/000-osen.conf"
 
