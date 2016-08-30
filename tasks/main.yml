@@ -40,19 +40,20 @@
   command: awk '/secret_key_base/{print $2}' ./config/secrets.yml
   args:
     chdir: "{{ git_dest }}"
-  register: cmd_secrets
+  register: gen_secret
   when: has_secret.rc == 0
+
 
 - name: Gen a new secret
   command: "{{ bundler }} exec rake secret"
   args:
     chdir: "{{ git_dest }}"
-  register: cmd_secrets
+  register: get_secret
   when: has_secret.rc != 0
 
 - name: Set new key to 'secret_key'
   set_fact:
-    secret_key: "{{ cmd_secrets.stdout }}"
+    secret_key: "{{ gen_secret.stdout if has_secret.rc == 0 else get_secret.stdout }}"
 
 - name: Apply settings
   template:
