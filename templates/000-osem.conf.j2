@@ -1,11 +1,11 @@
 <VirtualHost *:80>
-  ServerName jessie.int.if.uff.br
-  ServerAdmin operador@if.uff.br
-  DocumentRoot {{ osem.wroot }}
-  PassengerUser www-data
-  PassengerGroup www-data
+  ServerName {{ env.OSEM_HOSTNAME }}
+  ServerAdmin {{ env.OSEM_EMAIL_ADDRESS }}
+  DocumentRoot {{ git_dest }}/public
+  PassengerUser {{ run_group }}
+  PassengerGroup {{ run_group }}
   RailsEnv {{ RAILS_ENV }}
-  <Directory {{ osem.wroot }}>
+  <Directory {{ git_dest }}/public>
     Allow from all
     Options -MultiViews
     Require all granted
