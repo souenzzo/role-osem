@@ -1,19 +1,10 @@
 ---
 # HOWTO: Recompile without chage key: ` mv log/production.log /bkp `
 # HOWTO: Generate a new key: ` mv config/key /bkp; mv log/production.log /bkp `
-
-- name: Install bundler
-  gem:
-    name: bundler
-
-- name: Get Gem.user_dir
-  register: cmd_gem
-  command: ruby -e 'print Gem.user_dir'
-  changed_when: "cmd_gem.rc != 0"
-
-- name: Bundler executable
-  set_fact:
-    bundler: "{{ cmd_gem.stdout }}/bin/bundler"
+## is assumed:
+# git, bundle in $PATH
+# rw perms in {{ git_dest }}
+# current use is on {{ run_group }}
 
 - name: "clone @{{ git_version }}"
   git:
@@ -26,7 +17,6 @@
   bundler:
     chdir: "{{ git_dest }}"
     deployment_mode: yes
-    executable: "{{ bundler }}"
 
 - name: check secrets.yml
   command: grep 'secret_key_base' ./config/secrets.yml
@@ -41,11 +31,11 @@
   args:
     chdir: "{{ git_dest }}"
   register: gen_secret
+  changed_when: no
   when: has_secret.rc == 0
 
-
 - name: Gen a new secret
-  command: "{{ bundler }} exec rake secret"
+  command: "bundle exec rake secret"
   args:
     chdir: "{{ git_dest }}"
   register: get_secret
@@ -74,18 +64,11 @@
     state: "directory"
   with_items: "{{ rwdir }}"
 
-- name: Bundle db:setup
-  shell: "{{ bundler }} exec rake db:setup RAILS_ENV={{ RAILS_ENV }} > ./log/setup.log 2> ./log/setup.err.log"
-  args:
-    chdir: "{{ git_dest }}"
-    creates: "./log/setup.log"
-
 - name: Bundle db:migrate assets:precompile
-  shell: "{{ bundler }} exec rake db:migrate assets:precompile  RAILS_ENV={{ RAILS_ENV }} > ./log/{{ RAILS_ENV }}.log 2> ./log/{{ RAILS_ENV }}.err.log"
+  shell: "bundle exec rake assets:precompile db:migrate RAILS_ENV={{ RAILS_ENV }} > ./log/setup.log 2> ./log/setup.err.log"
   args:
     chdir: "{{ git_dest }}"
-    creates: "./log/{{ RAILS_ENV }}.log"
-
+    creates: "./log/{{ RAILS_ENV }}.err.log"
 
 - name: Apache site
   template:
