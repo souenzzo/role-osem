@@ -1,12 +1,5 @@
 ---
-builder:
-  name: root
-  group: root
-  home: /root
-runner:
-  name: www-data
-  group: www-data
-  home: /var/www
+run_group: "www-data"
 git_repo: "https://github.com/openSUSE/osem.git"
 git_version: "v1.0"
 git_dest: "/srv/osem"
