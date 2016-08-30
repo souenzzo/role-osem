@@ -75,13 +75,13 @@
   with_items: "{{ rwdir }}"
 
 - name: Bundle db:setup
-  shell: "{{ bundler }} exec rake db:setup RAILS_ENV={{ RAILS_ENV }} &> ./log/setup.log"
+  shell: "{{ bundler }} exec rake db:setup RAILS_ENV={{ RAILS_ENV }} > ./log/setup.log 2> ./log/setup.err.log"
   args:
     chdir: "{{ git_dest }}"
     creates: "./log/setup.log"
 
 - name: Bundle db:migrate assets:precompile
-  shell: "{{ bundler }} exec rake db:migrate assets:precompile  RAILS_ENV={{ RAILS_ENV }} &> ./log/{{ RAILS_ENV }}.log"
+  shell: "{{ bundler }} exec rake db:migrate assets:precompile  RAILS_ENV={{ RAILS_ENV }} > ./log/{{ RAILS_ENV }}.log 2> ./log/{{ RAILS_ENV }}.err.log"
   args:
     chdir: "{{ git_dest }}"
     creates: "./log/{{ RAILS_ENV }}.log"
